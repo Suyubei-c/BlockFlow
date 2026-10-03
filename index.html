@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>时块 BlockFlow · 时间块管理</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="时块" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+  <div class="app">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark">时</span>
+        <div class="brand-text">
+          <strong>时块</strong>
+          <small>BlockFlow</small>
+        </div>
+      </div>
+      <button id="todayPill" class="today-pill" type="button">今天</button>
+    </header>
+
+    <main class="app-main" id="mainContent" tabindex="-1">
+      <!-- ============ 今日 ============ -->
+      <section id="view-today" class="view is-active" role="tabpanel" aria-labelledby="tab-today">
+        <div class="date-bar">
+          <button id="prevDay" class="icon-btn" type="button" aria-label="前一天">‹</button>
+          <div class="date-bar-center">
+            <span id="dateLabel" class="date-label">--</span>
+            <span id="dateWeek" class="date-week">--</span>
+          </div>
+          <button id="nextDay" class="icon-btn" type="button" aria-label="后一天">›</button>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span class="summary-label">计划时长</span>
+            <strong id="sumPlan" class="summary-value">0h</strong>
+            <span id="sumPlanCount" class="summary-sub">0 个任务</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">已完成</span>
+            <strong id="sumDone" class="summary-value">0h</strong>
+            <span id="sumDoneCount" class="summary-sub">0 个任务</span>
+          </div>
+          <div class="summary-card accent">
+            <span class="summary-label">剩余可用时间</span>
+            <strong id="sumFree" class="summary-value">0h</strong>
+            <span id="sumFreeHint" class="summary-sub">--</span>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>时间线</h2>
+            <span id="timelineHint" class="panel-hint">按计划开始时间排序</span>
+          </div>
+          <div id="shortagePanel" class="shortage-panel" hidden></div>
+          <div id="timeline" class="timeline"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>任务列表</h2>
+            <span id="taskCount" class="panel-hint">0 项</span>
+          </div>
+          <div id="taskList" class="task-list"></div>
+        </section>
+      </section>
+
+      <!-- ============ 新建任务 ============ -->
+      <section id="view-new" class="view" role="tabpanel" aria-labelledby="tab-new">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>新建任务</h2>
+            <span class="panel-hint">支持一次输入多个</span>
+          </div>
+          <label class="field">
+            <span class="field-label">任务清单（每行一个）</span>
+            <textarea id="bulkInput" rows="6" placeholder="阅读一章书籍&#10;写周报&#10;跑步 30 分钟"></textarea>
+          </label>
+
+          <label class="field">
+            <span class="field-label">安排方式</span>
+            <select id="newMode">
+              <option value="free">自由安排</option>
+              <option value="preferred">偏好时间</option>
+              <option value="fixed">固定时间</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">安排日期</span>
+            <input id="newDate" type="date" />
+          </label>
+          <div class="quick-dates" role="group" aria-label="快捷选择日期">
+            <button id="newDateToday" class="chip" type="button">今天</button>
+            <button id="newDateTomorrow" class="chip" type="button">明天</button>
+            <span id="newDateHint" class="chip-hint"></span>
+          </div>
+          <p class="field-help">可选择今天、明天或任意日期；自由、偏好与固定任务都按此日期安排。</p>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">目标时长（分钟）</span>
+              <input id="defaultDuration" type="number" min="5" max="600" step="5" placeholder="留空自动估算" />
+            </label>
+            <label class="field">
+              <span class="field-label">批量目标时长（可为空）</span>
+              <input id="bulkDurations" type="text" placeholder="例如：30,60,180（按行对应）" />
+            </label>
+          </div>
+          <p class="field-help">不填写目标时长时，系统会按任务内容自动估算，可在「今日」列表点「编辑」修改。</p>
+
+          <div id="newFreeBox" class="sub-box">
+            <label class="field">
+              <span class="field-label">计划开始时间（用于排序参考）</span>
+              <input id="defaultStart" type="time" value="09:00" />
+            </label>
+            <p class="field-help">自由安排：系统会从可用时间中自动寻找空位。</p>
+          </div>
+
+          <div id="newPreferredBox" class="sub-box" hidden>
+            <label class="field">
+              <span class="field-label">偏好开始时间</span>
+              <input id="newPrefStart" type="time" value="09:00" />
+            </label>
+            <p class="field-help">偏好时间：优先安排在此时段，若被固定任务或用餐占用则自动顺延。</p>
+          </div>
+
+          <div id="newFixedBox" class="sub-box" hidden>
+            <div class="field-row">
+              <label class="field">
+                <span class="field-label">开始时间</span>
+                <input id="newFixedStart" type="time" value="15:00" />
+              </label>
+              <label class="field">
+                <span class="field-label">结束时间</span>
+                <input id="newFixedEnd" type="time" value="17:00" />
+              </label>
+            </div>
+            <label class="field">
+              <span class="field-label">重复规则</span>
+              <select id="newFixedRepeat">
+                <option value="none">仅今天</option>
+                <option value="daily">每天</option>
+                <option value="weekdays">工作日</option>
+
+                <option value="custom">自定义重复</option>
+              </select>
+            </label>
+            <div id="newFixedRepeatDays" class="weekday-picker" hidden>
+              <label><input type="checkbox" value="1" />一</label>
+              <label><input type="checkbox" value="2" />二</label>
+              <label><input type="checkbox" value="3" />三</label>
+              <label><input type="checkbox" value="4" />四</label>
+              <label><input type="checkbox" value="5" />五</label>
+              <label><input type="checkbox" value="6" />六</label>
+              <label><input type="checkbox" value="0" />日</label>
+            </div>
+            <p class="field-help">24 小时制：下午三点到五点填写 15:00 - 17:00。固定模式下一次仅支持单个任务；目标时长超过固定时段时，超出部分自动安排到其他空闲时间。</p>
+          </div>
+
+          <div id="newHint" class="hint" role="status" aria-live="polite"></div>
+          <div class="btn-row">
+            <button id="addTasksBtn" class="btn primary" type="button">添加到当天</button>
+            <button id="fillDemoBtn" class="btn ghost" type="button">填充示例</button>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>添加说明</h2></div>
+          <ul class="tip-list">
+            <li>每一行会被识别为一个独立任务，任务可在「今日」列表点「编辑」再次修改。</li>
+            <li>批量目标时长按行依次对应，数量不足的行自动使用默认目标时长。</li>
+            <li>自由安排 / 偏好时间的任务会依次顺延，避免相互重叠。</li>
+            <li>固定时间的任务会锁定该时段，其他任务不会占用；与已有固定任务或用餐冲突时会明确提示且不会覆盖。</li>
+            <li>所有数据仅保存在本机浏览器 localStorage 中，刷新后固定时间与剩余安排仍会保留。</li>
+          </ul>
+        </section>
+      </section>
+
+      <!-- ============ 执行 ============ -->
+      <section id="view-run" class="view" role="tabpanel" aria-labelledby="tab-run">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>执行</h2>
+            <span id="runDateHint" class="panel-hint">--</span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">选择任务</span>
+            <select id="runTaskSelect"></select>
+          </label>
+
+          <div id="runEmpty" class="empty">
+            <p>当天没有可执行的任务。</p>
+            <p class="empty-sub">请先到「新建任务」添加，或切换到其他日期。</p>
+          </div>
+
+          <div id="runCard" class="run-card" hidden>
+            <div class="run-status" id="runStatus">待开始</div>
+            <h3 id="runTitle" class="run-title">--</h3>
+            <div class="run-timer" id="runTimer">00:00:00</div>
+            <div class="run-meta">
+              <span>目标 <b id="runPlan">0</b> 分钟</span>
+              <span>剩余 <b id="runRemain">0</b> 分钟</span>
+              <span>已顺延 <b id="runDelay">0</b> 分钟</span>
+              <span>中断 <b id="runInterrupt">0</b> 次</span>
+            </div>
+            <div class="btn-row wrap">
+              <button id="btnStart" class="btn primary" type="button">开始</button>
+              <button id="btnPause" class="btn warn" type="button">暂停</button>
+              <button id="btnResume" class="btn warn" type="button">继续</button>
+              <button id="btnBreak" class="btn ghost" type="button">记录中断</button>
+              <button id="btnComplete" class="btn success" type="button">完成</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>进度备注</h2><span id="runNoteHint" class="panel-hint">记录进度与下次继续位置</span></div>
+          <div id="runNoteEmpty" class="empty">
+            <p>请先选择一个任务。</p>
+            <p class="empty-sub">选择任务后可记录进度备注与下次继续位置。</p>
+          </div>
+          <div id="runNoteCard" hidden>
+            <label class="field">
+              <span class="field-label">下次继续位置</span>
+              <input id="runResumeFrom" type="text" maxlength="120" placeholder="如：从第 3 节继续" />
+            </label>
+            <label class="field">
+              <span class="field-label">进度备注</span>
+              <textarea id="runNoteInput" rows="2" maxlength="300" placeholder="如：已完成第一部分"></textarea>
+            </label>
+            <div class="btn-row">
+              <button id="runNoteAddBtn" class="btn primary" type="button">添加备注</button>
+            </div>
+            <div id="runNoteList" class="note-list"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>中断记录</h2><span id="interruptCount" class="panel-hint">0 条</span></div>
+          <div id="interruptList" class="interrupt-list"></div>
+        </section>
+      </section>
+
+      <!-- ============ 复盘 ============ -->
+      <section id="view-review" class="view" role="tabpanel" aria-labelledby="tab-review">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>复盘</h2>
+            <span id="reviewDateHint" class="panel-hint">--</span>
+          </div>
+          <div class="summary-grid two">
+            <div class="summary-card">
+              <span class="summary-label">计划总时长</span>
+              <strong id="revPlan" class="summary-value">0h</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">实际总时长</span>
+              <strong id="revActual" class="summary-value">0h</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">完成率</span>
+              <strong id="revRate" class="summary-value">0%</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">计划偏差</span>
+              <strong id="revDeviation" class="summary-value">0h</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">中断次数</span>
+              <strong id="revInterrupt" class="summary-value">0</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">中断总时长</span>
+              <strong id="revInterruptMin" class="summary-value">0h</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">顺延总时长</span>
+              <strong id="revDelay" class="summary-value">0h</strong>
+            </div>
+            <div class="summary-card">
+              <span class="summary-label">完成任务数</span>
+              <strong id="revDoneCount" class="summary-value">0/0</strong>
+            </div>
+          </div>
+          <div class="rate-bar-wrap" aria-hidden="true">
+            <div id="revRateBar" class="rate-bar ok" style="width:0%"></div>
+          </div>
+          <div id="revDist" class="dist-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>任务明细</h2></div>
+          <div id="reviewFilters" class="filter-bar">
+            <button class="filter-chip is-active" type="button" data-filter="all" aria-pressed="true">全部</button>
+            <button class="filter-chip" type="button" data-filter="done" aria-pressed="false">已完成</button>
+            <button class="filter-chip" type="button" data-filter="undone" aria-pressed="false">未完成</button>
+            <button class="filter-chip" type="button" data-filter="interrupt" aria-pressed="false">有中断</button>
+            <button class="filter-chip" type="button" data-filter="delayed" aria-pressed="false">已顺延</button>
+          </div>
+          <div id="reviewList" class="review-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>历史记录</h2>
+            <span id="historyCount" class="panel-hint">0 天</span>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>历史详情</h2></div>
+          <div id="historyDetailBox" class="history-detail">
+            <p class="note-empty">从上方选择日期查看当天完整记录</p>
+          </div>
+        </section>
+      </section>
+
+      <!-- ============ 设置 ============ -->
+      <section id="view-settings" class="view" role="tabpanel" aria-labelledby="tab-settings">
+        <section class="panel">
+          <div class="panel-head"><h2>作息</h2></div>
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">入睡时间</span>
+              <input id="setSleepStart" type="time" value="23:00" />
+            </label>
+            <label class="field">
+              <span class="field-label">起床时间</span>
+              <input id="setSleepEnd" type="time" value="07:00" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>吃饭</h2></div>
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">早餐时间</span>
+              <input id="setBreakfast" type="time" value="08:00" />
+            </label>
+            <label class="field">
+              <span class="field-label">午餐时间</span>
+              <input id="setLunch" type="time" value="12:00" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">晚餐时间</span>
+              <input id="setDinner" type="time" value="18:30" />
+            </label>
+            <label class="field">
+              <span class="field-label">每餐时长（分钟）</span>
+              <input id="setMealDuration" type="number" min="10" max="180" step="5" value="40" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>固定占用（上课 / 通勤等）</h2><span id="fixedBlocksCount" class="panel-hint">0 条</span></div>
+          <p class="field-help">这些时段会被锁定，其他任务自动避开；不勾选星期表示每天生效。</p>
+          <div id="fixedBlocksList" class="fixed-blocks"></div>
+          <div class="btn-row">
+            <button id="addFixedBlockBtn" class="btn ghost" type="button">添加固定占用</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>时间规则表</h2><span id="rulesCount" class="panel-hint">0 条</span></div>
+          <p class="field-help">集中管理所有「固定时间」与「偏好时间」任务：可编辑、替换任务、暂停 / 恢复规则、删除。修改后立即保存并重新排期，与「新建」「编辑」共用同一份数据。</p>
+          <div id="rulesList" class="rules-list"></div>
+          <div class="btn-row">
+            <button id="newRuleBtn" class="btn ghost" type="button">新建时间规则</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>缓冲与离开确认</h2></div>
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">休息缓冲（分钟）</span>
+              <input id="setBreakBuffer" type="number" min="0" max="120" step="5" value="10" />
+            </label>
+            <label class="field">
+              <span class="field-label">离开确认阈值（分钟，1 ~ 60）</span>
+              <input id="setLeaveThreshold" type="number" min="1" max="60" step="1" value="5" />
+            </label>
+          </div>
+          <p class="field-help">离开确认阈值：执行任务时离开超过该时长（后台、锁屏或切走后返回），会弹出确认框询问这段时间是否计入任务。默认 5 分钟，可设 1 ~ 60 分钟。</p>
+          <div id="settingsHint" class="hint" role="status" aria-live="polite"></div>
+          <div class="btn-row">
+            <button id="saveSettingsBtn" class="btn primary" type="button">保存设置</button>
+            <button id="resetSettingsBtn" class="btn ghost" type="button">恢复默认</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>数据</h2></div>
+          <p class="field-help">数据保存在本机浏览器，清除浏览器数据会一并丢失。可导出为 JSON 备份，或从 JSON 文件导入（不经过任何云端）。</p>
+          <div class="btn-row wrap">
+            <button id="exportDataBtn" class="btn ghost" type="button">导出数据</button>
+            <button id="importDataBtn" class="btn ghost" type="button">导入数据</button>
+            <input id="importFile" type="file" accept="application/json,.json" hidden />
+            <button id="loadDemoBtn" class="btn ghost" type="button">载入示例数据</button>
+            <button id="clearAllBtn" class="btn danger" type="button">清空全部数据</button>
+          </div>
+          <p id="dataHint" class="hint" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="pwaPanel" class="panel">
+          <div class="panel-head"><h2>安装到桌面</h2></div>
+          <p class="field-help">将时块安装为桌面 / 主屏幕应用，可离线打开（首次安装需通过 http/https 访问）。</p>
+          <div class="btn-row">
+            <button id="installAppBtn" class="btn primary" type="button" hidden>安装到桌面</button>
+            <span id="installHint" class="field-help" role="status" aria-live="polite"></span>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="tabbar" role="tablist" aria-label="主导航">
+      <button id="tab-today" class="tab is-active" data-view="today" role="tab" aria-controls="view-today" aria-selected="true" type="button">
+        <span class="tab-icon" aria-hidden="true">☀</span><span>今日</span>
+      </button>
+      <button id="tab-new" class="tab" data-view="new" role="tab" aria-controls="view-new" aria-selected="false" type="button">
+        <span class="tab-icon" aria-hidden="true">＋</span><span>新建</span>
+      </button>
+      <button id="tab-run" class="tab" data-view="run" role="tab" aria-controls="view-run" aria-selected="false" type="button">
+        <span class="tab-icon" aria-hidden="true">▶</span><span>执行</span>
+      </button>
+      <button id="tab-review" class="tab" data-view="review" role="tab" aria-controls="view-review" aria-selected="false" type="button">
+        <span class="tab-icon" aria-hidden="true">▤</span><span>复盘</span>
+      </button>
+      <button id="tab-settings" class="tab" data-view="settings" role="tab" aria-controls="view-settings" aria-selected="false" type="button">
+        <span class="tab-icon" aria-hidden="true">⚙</span><span>设置</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="editModal" class="modal" hidden>
+    <div class="modal-backdrop" data-act="cancel"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editTitleText">
+      <div class="modal-head">
+        <h3 id="editTitleText" class="modal-title">编辑任务</h3>
+        <button class="icon-btn" type="button" data-act="cancel" aria-label="关闭">✕</button>
+      </div>
+      <label class="field">
+        <span class="field-label">任务名称</span>
+        <input id="editTitle" type="text" maxlength="80" />
+      </label>
+      <label class="field">
+        <span class="field-label">安排方式</span>
+        <select id="editMode">
+          <option value="free">自由安排</option>
+          <option value="preferred">偏好时间</option>
+          <option value="fixed">固定时间</option>
+        </select>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">目标时长（分钟）</span>
+          <input id="editDuration" type="number" min="5" max="600" step="5" />
+        </label>
+        <label class="field">
+          <span class="field-label">日期</span>
+          <input id="editDate" type="date" />
+        </label>
+      </div>
+
+      <div id="editFreeBox" class="sub-box">
+        <label class="field">
+          <span class="field-label">计划开始时间</span>
+          <input id="editStart" type="time" />
+        </label>
+      </div>
+
+      <div id="editPreferredBox" class="sub-box" hidden>
+        <label class="field">
+          <span class="field-label">偏好开始时间</span>
+          <input id="editPrefStart" type="time" />
+        </label>
+      </div>
+
+      <div id="editFixedBox" class="sub-box" hidden>
+        <div class="field-row">
+          <label class="field">
+            <span class="field-label">开始时间</span>
+            <input id="editFixedStart" type="time" />
+          </label>
+          <label class="field">
+            <span class="field-label">结束时间</span>
+            <input id="editFixedEnd" type="time" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label">重复规则</span>
+          <select id="editFixedRepeat">
+            <option value="none">仅今天</option>
+            <option value="daily">每天</option>
+            <option value="weekdays">工作日</option>
+
+            <option value="custom">自定义重复</option>
+          </select>
+        </label>
+        <div id="editFixedRepeatDays" class="weekday-picker" hidden>
+          <label><input type="checkbox" value="1" />一</label>
+          <label><input type="checkbox" value="2" />二</label>
+          <label><input type="checkbox" value="3" />三</label>
+          <label><input type="checkbox" value="4" />四</label>
+          <label><input type="checkbox" value="5" />五</label>
+          <label><input type="checkbox" value="6" />六</label>
+          <label><input type="checkbox" value="0" />日</label>
+        </div>
+      </div>
+
+      <div id="editHint" class="hint" role="status" aria-live="polite"></div>
+      <div class="btn-row">
+        <button id="editSaveBtn" class="btn primary" type="button">保存修改</button>
+        <button id="editCancelBtn" class="btn ghost" type="button">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="replaceModal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="replaceTitle" aria-describedby="replaceDesc">
+      <div class="modal-head">
+        <h2 id="replaceTitle">替换任务</h2>
+        <button class="icon-btn" type="button" data-act="cancel" aria-label="关闭">✕</button>
+      </div>
+      <p class="field-help" id="replaceDesc">选择一个已有任务，或输入新任务名称，让新任务接管原来的固定 / 偏好时间。原任务将取消固定或偏好约束并改为自由安排。</p>
+      <label class="field">
+        <span class="field-label">选择已有任务</span>
+        <select id="replaceExisting"><option value="">（不选择，改用下方新名称）</option></select>
+      </label>
+      <label class="field">
+        <span class="field-label">或输入新任务名称</span>
+        <input id="replaceNewTitle" type="text" maxlength="80" placeholder="如：物理" />
+      </label>
+      <div id="replaceHint" class="hint" role="status" aria-live="polite"></div>
+      <div class="btn-row">
+        <button id="replaceConfirmBtn" class="btn primary" type="button">确认替换</button>
+        <button id="replaceCancelBtn" class="btn ghost" type="button">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="leaveModal" class="modal" hidden>
+    <div class="modal-backdrop" data-act="cancel"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="leaveModalTitle" aria-describedby="leaveRange">
+      <div class="modal-head">
+        <h3 id="leaveModalTitle" class="modal-title">你离开了一段时间</h3>
+        <button class="icon-btn" type="button" data-act="cancel" aria-label="关闭">✕</button>
+      </div>
+      <p class="field-help" id="leaveRange">离开区间：--</p>
+      <p class="field-help">请选择这段时间如何处理。确认后离开区间会被清空，不会重复计算。</p>
+      <div class="leave-options">
+        <button id="leaveAllBtn" class="btn primary" type="button">全部计入</button>
+        <button id="leaveNoneBtn" class="btn ghost" type="button">全部不计入</button>
+        <button id="leavePauseBtn" class="btn ghost" type="button">从离开时暂停</button>
+      </div>
+      <label class="field">
+        <span class="field-label">只计入一部分（分钟，0 ~ 离开时长）</span>
+        <div class="leave-part-row">
+          <input id="leavePartMinutes" type="number" min="0" step="1" value="10" aria-label="部分计入分钟数" />
+          <button id="leavePartBtn" class="btn ghost" type="button">只计入这些</button>
+        </div>
+      </label>
+      <div id="leaveHint" class="hint" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
